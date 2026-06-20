@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { resolveVendorId } from "@/lib/vendor-resolution";
 
 export async function login(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
@@ -43,50 +44,11 @@ export async function addExpense(formData: FormData) {
   // Normalize vendor name so "BigBasket" and "bigbasket " resolve to the same vendor
   const vendorName = vendorNameRaw.replace(/\s+/g, " ");
 
-  // 1. Find an existing vendor (case-insensitive)
-  const { data: existingVendor } = await supabase
-    .from("vendors")
-    .select("id, category_id")
-    .ilike("name", vendorName)
-    .maybeSingle();
-
-  let vendorId: string;
-
-  if (existingVendor) {
-    vendorId = existingVendor.id;
-
-    // Work out what category this vendor currently resolves to for this user
-    const { data: override } = await supabase
-      .from("vendor_overrides")
-      .select("category_id")
-      .eq("vendor_id", vendorId)
-      .eq("user_id", user!.id)
-      .maybeSingle();
-
-    const resolvedDefault = override?.category_id ?? existingVendor.category_id;
-
-    // If this user picked something different, remember it as their personal override
-    if (resolvedDefault !== categoryId) {
-      await supabase
-        .from("vendor_overrides")
-        .upsert(
-          { vendor_id: vendorId, user_id: user!.id, category_id: categoryId },
-          { onConflict: "vendor_id,user_id" }
-        );
-    }
-  } else {
-    // Brand new vendor — this category becomes the shared default for everyone
-    const { data: newVendor, error: vendorError } = await supabase
-      .from("vendors")
-      .insert({ name: vendorName, category_id: categoryId, created_by: user!.id })
-      .select("id")
-      .single();
-
-    if (vendorError || !newVendor) {
-      redirect("/expenses/new?error=Could+not+save+vendor");
-    }
-    vendorId = newVendor!.id;
+  const resolved = await resolveVendorId(supabase, user!.id, vendorName, categoryId);
+  if ("error" in resolved) {
+    redirect(`/expenses/new?error=${encodeURIComponent(resolved.error)}`);
   }
+  const vendorId = resolved.vendorId;
 
   const { error: expenseError } = await supabase.from("expenses").insert({
     user_id: user!.id,
