@@ -97,7 +97,7 @@ export function ImportWizard({
             const guessed: ColumnMapping = {
               headerSignature: sig,
               bankLabel: "",
-              dateColumn: guessColumn(fields, ["date", "txn date", "transaction date"]),
+              dateColumn: guessColumn(fields, ["transaction date", "txn date", "posting date", "date"]),
               descriptionColumn: guessColumn(fields, ["narration", "description", "particulars", "details", "remarks"]),
               debitColumn: guessColumn(fields, ["debit", "withdrawal", "amount"]),
               creditColumn: guessColumn(fields, ["credit", "deposit"]) || null,
@@ -206,6 +206,7 @@ export function ImportWizard({
   }
 
   const selectedCount = reviewRows.filter((r) => r.selected).length;
+  const missingDateCount = reviewRows.filter((r) => r.selected && !r.expenseDate).length;
 
   return (
     <div className="rounded-sm border border-line bg-paper-raised p-6 shadow-sm">
@@ -274,13 +275,27 @@ export function ImportWizard({
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm text-ink-soft">
               Found <strong>{reviewRows.length}</strong> spending transactions in{" "}
-              <strong>{fileName}</strong>. Review before importing.
+              <strong>{fileName}</strong>.
+              {missingDateCount > 0 && (
+                <span className="ml-1 text-rust">
+                  {missingDateCount} row{missingDateCount === 1 ? "" : "s"} need a date (highlighted below).
+                </span>
+              )}
             </p>
             <div className="flex gap-3 text-xs">
               <button type="button" onClick={() => toggleAll(true)} className="text-ledger-deep hover:underline">Select all</button>
               <button type="button" onClick={() => toggleAll(false)} className="text-ink-soft hover:underline">Select none</button>
             </div>
           </div>
+
+          {missingDateCount > 0 && (
+            <p className="mb-3 text-xs text-ink-soft">
+              If most rows are missing dates, the wrong column was probably picked.{" "}
+              <button type="button" onClick={() => setStep("mapping")} className="text-ledger-deep underline">
+                Fix column mapping
+              </button>
+            </p>
+          )}
 
           <div className="mb-4 max-h-[28rem] overflow-y-auto rounded-sm border border-line">
             <table className="w-full text-sm">
@@ -295,12 +310,12 @@ export function ImportWizard({
               </thead>
               <tbody>
                 {reviewRows.map((row, i) => (
-                  <tr key={i} className="border-t border-line">
+                  <tr key={i} className={`border-t border-line ${!row.expenseDate && row.selected ? "bg-rust/10" : ""}`}>
                     <td className="px-2 py-2">
                       <input type="checkbox" checked={row.selected} onChange={(e) => updateRow(i, { selected: e.target.checked })} />
                     </td>
                     <td className="px-2 py-2">
-                      <input type="date" value={row.expenseDate} onChange={(e) => updateRow(i, { expenseDate: e.target.value })} className="w-32 rounded-sm border border-line bg-paper px-1 py-1 text-xs" />
+                      <input type="date" value={row.expenseDate} onChange={(e) => updateRow(i, { expenseDate: e.target.value })} className={`w-32 rounded-sm border bg-paper px-1 py-1 text-xs ${!row.expenseDate && row.selected ? "border-rust" : "border-line"}`} />
                     </td>
                     <td className="px-2 py-2">
                       <input type="text" value={row.vendorName} onChange={(e) => updateRow(i, { vendorName: e.target.value })} className="w-full min-w-[8rem] rounded-sm border border-line bg-paper px-1 py-1 text-xs" />

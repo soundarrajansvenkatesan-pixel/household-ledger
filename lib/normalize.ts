@@ -64,24 +64,33 @@ export function guessColumn(headers: string[], keywords: string[]): string {
 
 // Handles DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD and similar common bank formats
 export function parseStatementDate(raw: string): string | null {
-  const s = raw.trim();
+  const s = raw.trim().replace(/^["']|["']$/g, "");
   if (!s) return null;
 
-  // YYYY-MM-DD or YYYY/MM/DD
-  let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  // YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
 
-  // DD-MM-YYYY or DD/MM/YYYY
-  m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  // DD-MM-YYYY, DD/MM/YYYY, or DD.MM.YYYY (4-digit year)
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
   if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
 
-  // DD-MMM-YYYY (e.g. 05-Jan-2026)
-  m = s.match(/^(\d{1,2})[-\s](\w{3,})[-\s](\d{4})/);
+  // DD-MM-YY, DD/MM/YY, or DD.MM.YY (2-digit year — assume 2000s)
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/);
+  if (m) return `20${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+
+  // DD-MMM-YYYY or DD-MMM-YY (e.g. 05-Jan-2026 or 05-Jan-26)
+  m = s.match(/^(\d{1,2})[-\s](\w{3,})[-\s](\d{2,4})/);
   if (m) {
     const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
     const idx = months.indexOf(m[2].toLowerCase().slice(0, 3));
-    if (idx !== -1) return `${m[3]}-${String(idx + 1).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+    if (idx !== -1) return `${year}-${String(idx + 1).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   }
+
+  // DDMMYYYY with no separators (e.g. 20062026)
+  m = s.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
 
   return null;
 }
